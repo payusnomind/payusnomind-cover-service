@@ -138,11 +138,16 @@ app.post('/generate', async (req, res) => {
     });
 
     await page.goto(renderUrl, {
-      waitUntil: 'networkidle',
-      timeout: 30000
-    });
+  waitUntil: 'domcontentloaded',
+  timeout: 30000
+});
 
-    await page.waitForTimeout(900);
+await page.waitForSelector('#punm-cover', {
+  state: 'visible',
+  timeout: 10000
+});
+
+await page.waitForTimeout(1500);
 
     const target = page.locator(selector);
 
