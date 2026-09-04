@@ -1,5 +1,10 @@
-import express from 'express';
-import { chromium } from 'playwright';
+process.env.PLAYWRIGHT_BROWSERS_PATH = '0';
+
+const expressModule = await import('express');
+const playwrightModule = await import('playwright');
+
+const express = expressModule.default;
+const { chromium } = playwrightModule;
 
 const app = express();
 app.use(express.json({ limit: '64kb' }));
