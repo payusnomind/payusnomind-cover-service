@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "postinstall": "playwright install chromium",
     "start": "node server.js"
   },
   "engines": {
