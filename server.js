@@ -1,39 +1,39 @@
-process.env.PLAYWRIGHT_BROWSERS_PATH = '0';
-
 const express = require('express');
-const { chromium } = require('playwright');
+const { chromium } = require('playwright-core');
 
 const app = express();
 app.use(express.json({ limit: '64kb' }));
 
 const PORT = Number(process.env.PORT || 3000);
-const SECRET = String(process.env.PUNM_COVER_SERVICE_SECRET || '');
+
+const SECRET = String(
+  process.env.PUNM_COVER_SERVICE_SECRET || ''
+);
+
+const BROWSERLESS_TOKEN = String(
+  process.env.BROWSERLESS_TOKEN || ''
+);
+
 const ALLOWED_ORIGIN = String(
-  process.env.PUNM_ALLOWED_ORIGIN || 'https://payusnomind.info'
+  process.env.PUNM_ALLOWED_ORIGIN ||
+  'https://payusnomind.info'
 ).replace(/\/+$/, '');
 
 if (!SECRET) {
-  throw new Error('PUNM_COVER_SERVICE_SECRET is required.');
+  throw new Error(
+    'PUNM_COVER_SERVICE_SECRET is required.'
+  );
 }
 
-let browserPromise;
-
-function getBrowser() {
-  if (!browserPromise) {
-    browserPromise = chromium.launch({
-      headless: true,
-      args: ['--no-sandbox', '--disable-dev-shm-usage']
-    }).catch((error) => {
-      browserPromise = undefined;
-      throw error;
-    });
-  }
-
-  return browserPromise;
+if (!BROWSERLESS_TOKEN) {
+  throw new Error(
+    'BROWSERLESS_TOKEN is required.'
+  );
 }
 
 function authorized(req) {
-  return req.get('authorization') === `Bearer ${SECRET}`;
+  return req.get('authorization') ===
+    `Bearer ${SECRET}`;
 }
 
 function isAllowedRenderUrl(value) {
@@ -41,24 +41,43 @@ function isAllowedRenderUrl(value) {
     const url = new URL(value);
     const allowed = new URL(ALLOWED_ORIGIN);
 
-    if (url.protocol !== 'https:') return false;
-    if (url.origin !== allowed.origin) return false;
-    if (url.pathname !== '/blog/cover-render.php') return false;
+    if (url.protocol !== 'https:') {
+      return false;
+    }
+
+    if (url.origin !== allowed.origin) {
+      return false;
+    }
+
+    if (url.pathname !== '/blog/cover-render.php') {
+      return false;
+    }
 
     return true;
+
   } catch {
     return false;
   }
 }
 
+async function getBrowser() {
+  const endpoint =
+    'wss://production-sfo.browserless.io' +
+    '?token=' +
+    encodeURIComponent(BROWSERLESS_TOKEN);
+
+  return chromium.connectOverCDP(endpoint);
+}
+
 app.get('/health', (_req, res) => {
   res.json({
     ok: true,
-    browserPath: chromium.executablePath()
+    browser: 'browserless'
   });
 });
 
 app.post('/generate', async (req, res) => {
+
   if (!authorized(req)) {
     return res.status(401).json({
       ok: false,
@@ -90,17 +109,32 @@ app.post('/generate', async (req, res) => {
     Math.min(1800, Number(height) || 900)
   );
 
+  let browser;
   let page;
 
   try {
-    const browser = await getBrowser();
 
-    page = await browser.newPage({
-      viewport: {
-        width: safeWidth,
-        height: safeHeight
-      },
-      deviceScaleFactor: 1
+    browser = await getBrowser();
+
+    /*
+     * Browserless recommends using the default
+     * context when connecting over CDP.
+     */
+    const contexts = browser.contexts();
+
+    if (!contexts.length) {
+      throw new Error(
+        'Browserless returned no browser context.'
+      );
+    }
+
+    const context = contexts[0];
+
+    page = await context.newPage();
+
+    await page.setViewportSize({
+      width: safeWidth,
+      height: safeHeight
     });
 
     await page.goto(renderUrl, {
@@ -131,7 +165,11 @@ app.post('/generate', async (req, res) => {
     return res.status(200).send(png);
 
   } catch (error) {
-    console.error('Cover generation error:', error);
+
+    console.error(
+      'Cover generation error:',
+      error
+    );
 
     return res.status(500).json({
       ok: false,
@@ -139,33 +177,29 @@ app.post('/generate', async (req, res) => {
     });
 
   } finally {
+
     if (page) {
       await page.close().catch(() => {});
+    }
+
+    /*
+     * Closing this connection releases the
+     * Browserless session.
+     */
+    if (browser) {
+      await browser.close().catch(() => {});
     }
   }
 });
 
-async function shutdown() {
-  try {
-    if (browserPromise) {
-      const browser = await browserPromise;
-      await browser.close();
-    }
-  } finally {
-    process.exit(0);
-  }
-}
-
-process.on('SIGTERM', shutdown);
-process.on('SIGINT', shutdown);
-
 app.listen(PORT, () => {
+
   console.log(
     `Payusnomind cover service listening on ${PORT}`
   );
 
   console.log(
-    'Playwright Chromium path:',
-    chromium.executablePath()
+    'Browser engine: Browserless Cloud'
   );
+
 });
