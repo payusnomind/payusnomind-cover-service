@@ -4,11 +4,10 @@
   "private": true,
   "scripts": {
     "postinstall": "PLAYWRIGHT_BROWSERS_PATH=0 npx playwright install chromium",
-    "prestart": "chmod -R u+rx node_modules/playwright-core/.local-browsers",
-    "start": "node server.js"
+    "start": "chmod -R u+rx node_modules/playwright-core/.local-browsers && node server.js"
   },
   "engines": {
-    "node": "20.x"
+    "node": ">=20"
   },
   "dependencies": {
     "express": "^5.1.0",
