@@ -3,14 +3,13 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "postinstall": "PLAYWRIGHT_BROWSERS_PATH=0 npx playwright install chromium",
-    "start": "chmod -R u+rx node_modules/playwright-core/.local-browsers && node server.js"
+    "start": "node server.js"
   },
   "engines": {
     "node": ">=20"
   },
   "dependencies": {
     "express": "^5.1.0",
-    "playwright": "^1.55.0"
+    "playwright-core": "^1.55.0"
   }
 }
