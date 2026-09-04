@@ -1,10 +1,7 @@
 process.env.PLAYWRIGHT_BROWSERS_PATH = '0';
 
-const expressModule = await import('express');
-const playwrightModule = await import('playwright');
-
-const express = expressModule.default;
-const { chromium } = playwrightModule;
+const express = require('express');
+const { chromium } = require('playwright');
 
 const app = express();
 app.use(express.json({ limit: '64kb' }));
@@ -31,6 +28,7 @@ function getBrowser() {
       throw error;
     });
   }
+
   return browserPromise;
 }
 
@@ -54,12 +52,18 @@ function isAllowedRenderUrl(value) {
 }
 
 app.get('/health', (_req, res) => {
-  res.json({ ok: true });
+  res.json({
+    ok: true,
+    browserPath: chromium.executablePath()
+  });
 });
 
 app.post('/generate', async (req, res) => {
   if (!authorized(req)) {
-    return res.status(401).json({ ok: false, error: 'Unauthorized.' });
+    return res.status(401).json({
+      ok: false,
+      error: 'Unauthorized.'
+    });
   }
 
   const {
@@ -70,18 +74,32 @@ app.post('/generate', async (req, res) => {
   } = req.body || {};
 
   if (!isAllowedRenderUrl(renderUrl)) {
-    return res.status(400).json({ ok: false, error: 'Invalid render URL.' });
+    return res.status(400).json({
+      ok: false,
+      error: 'Invalid render URL.'
+    });
   }
 
-  const safeWidth = Math.max(320, Math.min(2400, Number(width) || 1600));
-  const safeHeight = Math.max(180, Math.min(1800, Number(height) || 900));
+  const safeWidth = Math.max(
+    320,
+    Math.min(2400, Number(width) || 1600)
+  );
+
+  const safeHeight = Math.max(
+    180,
+    Math.min(1800, Number(height) || 900)
+  );
 
   let page;
 
   try {
     const browser = await getBrowser();
+
     page = await browser.newPage({
-      viewport: { width: safeWidth, height: safeHeight },
+      viewport: {
+        width: safeWidth,
+        height: safeHeight
+      },
       deviceScaleFactor: 1
     });
 
@@ -90,11 +108,14 @@ app.post('/generate', async (req, res) => {
       timeout: 30000
     });
 
-    /* Give the embedded article a moment to finish painting. */
     await page.waitForTimeout(900);
 
     const target = page.locator(selector);
-    await target.waitFor({ state: 'visible', timeout: 10000 });
+
+    await target.waitFor({
+      state: 'visible',
+      timeout: 10000
+    });
 
     const png = await target.screenshot({
       type: 'png',
@@ -108,12 +129,15 @@ app.post('/generate', async (req, res) => {
     });
 
     return res.status(200).send(png);
+
   } catch (error) {
     console.error('Cover generation error:', error);
+
     return res.status(500).json({
       ok: false,
       error: 'Screenshot generation failed.'
     });
+
   } finally {
     if (page) {
       await page.close().catch(() => {});
@@ -136,5 +160,12 @@ process.on('SIGTERM', shutdown);
 process.on('SIGINT', shutdown);
 
 app.listen(PORT, () => {
-  console.log(`Payusnomind cover service listening on ${PORT}`);
+  console.log(
+    `Payusnomind cover service listening on ${PORT}`
+  );
+
+  console.log(
+    'Playwright Chromium path:',
+    chromium.executablePath()
+  );
 });
